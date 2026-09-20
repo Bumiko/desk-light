@@ -4,7 +4,7 @@
 
 Горячие клавиши:
     Ctrl+Alt+L           включить или выключить
-    Ctrl+Alt+PgUp/PgDn   ярче или тусклее
+    Ctrl+Alt+PgUp/PgDn   ярче или тусклее, 40 шагов; клавишу можно держать зажатой
 
 Связь с платой держится сама: раз в несколько секунд состояние подтверждается заново,
 так что после перетыкания кабеля или перезагрузки платы свет возвращается без участия
@@ -26,7 +26,8 @@ from link import find
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, os.pardir, "state.json")
 
-LEVELS = [50, 100, 200, 350, 500, 700, 1000]  # ступеньки яркости, шкала 0..1000
+PRESETS = [50, 100, 200, 350, 500, 700, 1000]  # быстрые уровни в меню, шкала 0..1000
+MIN_LEVEL, MAX_LEVEL, STEP = 25, 1000, 25      # горячими клавишами — мелким шагом
 DEFAULT_LEVEL = 200
 HEARTBEAT_S = 3.0   # плата гасит ленту, если молчать дольше 15 секунд
 RECONNECT_S = 5.0
@@ -57,6 +58,7 @@ class Lights:
         self.connected = False
         self.board = None
         self.lock = threading.Lock()
+        self.pending = threading.Event()
         self.on_change = lambda: None
 
     def _send(self, command):
@@ -91,15 +93,23 @@ class Lights:
         self.apply()
 
     def set_level(self, level):
-        self.level = max(LEVELS[0], min(LEVELS[-1], int(level)))
+        self.level = max(MIN_LEVEL, min(MAX_LEVEL, int(level)))
         self.on = True
-        save_state({"level": self.level})
-        self.apply()
+        self.pending.set()
 
     def step(self, direction):
-        """Ярче (+1) или тусклее (−1) по ступенькам LEVELS."""
-        nearest = min(range(len(LEVELS)), key=lambda i: abs(LEVELS[i] - self.level))
-        self.set_level(LEVELS[max(0, min(len(LEVELS) - 1, nearest + direction))])
+        """Ярче (+1) или тусклее (−1) на один мелкий шаг; клавишу можно держать зажатой."""
+        self.set_level(self.level + STEP * direction)
+
+    def applier_loop(self):
+        """Шаги прилетают пачками при зажатой клавише: шлём последнее значение,
+        не чаще двадцати раз в секунду, чтобы не забивать порт."""
+        while True:
+            self.pending.wait()
+            self.pending.clear()
+            self.apply()
+            save_state({"level": self.level})
+            time.sleep(0.05)
 
     def heartbeat_loop(self):
         """Подтверждать состояние: это и сторож связи, и защита от перезагрузки платы."""
@@ -133,7 +143,8 @@ VK_L, VK_PRIOR, VK_NEXT = 0x4C, 0x21, 0x22
 WM_HOTKEY = 0x0312
 
 HOTKEYS = [
-    (MOD_CONTROL | MOD_ALT, VK_L, "Ctrl+Alt+L", "toggle"),
+    # у клавиш яркости нет MOD_NOREPEAT: их можно держать зажатыми
+    (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_L, "Ctrl+Alt+L", "toggle"),
     (MOD_CONTROL | MOD_ALT, VK_PRIOR, "Ctrl+Alt+PgUp", "brighter"),
     (MOD_CONTROL | MOD_ALT, VK_NEXT, "Ctrl+Alt+PgDn", "dimmer"),
 ]
@@ -143,7 +154,7 @@ def hotkey_loop(handlers):
     """Регистрация и разбор сочетаний — обязательно в одном потоке."""
     user32 = ctypes.windll.user32
     for number, (mods, vk, name, _) in enumerate(HOTKEYS, start=1):
-        if not user32.RegisterHotKey(None, number, mods | MOD_NOREPEAT, vk):
+        if not user32.RegisterHotKey(None, number, mods, vk):
             print("Сочетание %s занято другой программой" % name, flush=True)
     message = wintypes.MSG()
     while user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
@@ -169,10 +180,11 @@ def main():
     lights.on_change = refresh
 
     def level_item(level):
+        nearest = lambda: min(PRESETS, key=lambda p: abs(p - lights.level))
         return pystray.MenuItem(
             "%d%%" % (level // 10),
             lambda i, item: lights.set_level(level),
-            checked=lambda item: lights.on and lights.level == level,
+            checked=lambda item: lights.on and nearest() == level,
             radio=True,
         )
 
@@ -183,7 +195,7 @@ def main():
     icon.menu = pystray.Menu(
         pystray.MenuItem("Включить или выключить", lambda i, item: lights.toggle(), default=True),
         pystray.Menu.SEPARATOR,
-        *[level_item(level) for level in LEVELS],
+        *[level_item(level) for level in PRESETS],
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Выход", quit_app),
     )
@@ -195,6 +207,7 @@ def main():
     }
     threading.Thread(target=hotkey_loop, args=(handlers,), daemon=True).start()
     threading.Thread(target=lights.heartbeat_loop, daemon=True).start()
+    threading.Thread(target=lights.applier_loop, daemon=True).start()
 
     print("Подсветка запущена. Ctrl+Alt+L — вкл/выкл, Ctrl+Alt+PgUp/PgDn — яркость.",
           flush=True)
