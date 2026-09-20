@@ -40,6 +40,15 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1           # по�
 powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Remove   # убрать
 ```
 
+## Публикация
+Репозиторий: https://github.com/Bumiko/desk-light — публичный, лицензия MIT.
+Новая версия приложения:
+```
+.venv/Scripts/python -m PyInstaller --noconfirm --onefile --windowed --name desk-light \
+  --hidden-import pystray._win32 --distpath dist --workpath build --specpath build app/tray.py
+gh release create v1.1 dist/desk-light.exe --notes "что изменилось"
+```
+
 ## Запреты и договорённости
 - COM-порт не хардкодить: плата ищется по VID:PID `2E8A:0005` и опознаётся ответом на `PING`.
 - Потолок тока задаётся в прошивке (`MAX_DUTY`) — не поднимать без замера потребления.
@@ -49,4 +58,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Remove   # уб�
 - Хаб питается сам, поэтому плата живёт и без ноутбука. Гасит ленту прошивка: нет команд
   дольше `IDLE_OFF_MS` — свет выключается. Логику «ноутбук ушёл» держим на плате, а не в
   приложении, иначе лента останется гореть.
-- `.venv/` и файлы прошивок `*.uf2` в git не кладём.
+- `.venv/`, `build/`, `dist/`, `*.uf2` и `state.json` в git не кладём: собранный exe
+  раздаётся через Releases, а запомненная яркость живёт в `%LOCALAPPDATA%\desk-light`.
+- Значок трея: если передаёшь pystray свою функцию `setup`, в ней обязателен
+  `tray.visible = True` — иначе приложение работает, а значка нет.
