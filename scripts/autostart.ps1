@@ -3,7 +3,11 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1           поставить
 #   powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Remove   убрать
 #
-# Запускается pythonw.exe, а не python.exe: окно консоли не появляется.
+# Если собран dist\desk-light.exe, ярлык ведёт на него. Иначе запускается pythonw.exe
+# из окружения проекта: окно консоли при этом не появляется.
+#
+# Файл сохранён в UTF-8 с BOM. Без BOM Windows PowerShell 5.1 читает его как ANSI и
+# спотыкается на русских буквах.
 
 param([switch]$Remove)
 
@@ -21,18 +25,26 @@ if ($Remove) {
     return
 }
 
-$python = Join-Path $root '.venv\Scripts\pythonw.exe'
-if (-not (Test-Path $python)) {
-    throw "Не найден $python — сначала создай окружение: python -m venv .venv"
+$exe = Join-Path $root 'dist\desk-light.exe'
+$pythonw = Join-Path $root '.venv\Scripts\pythonw.exe'
+
+if (Test-Path $exe) {
+    $target = $exe
+    $arguments = ''
+} elseif (Test-Path $pythonw) {
+    $target = $pythonw
+    $arguments = 'app\tray.py'
+} else {
+    throw "Нечего запускать: нет ни $exe, ни $pythonw"
 }
 
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($link)
-$shortcut.TargetPath = $python
-$shortcut.Arguments = 'app\tray.py'
+$shortcut.TargetPath = $target
+$shortcut.Arguments = $arguments
 $shortcut.WorkingDirectory = $root
 $shortcut.Description = 'Подсветка клавиатуры под монитором'
 $shortcut.Save()
 
 Write-Output "Автозапуск поставлен: $link"
-Write-Output "Проверить руками: explorer shell:startup"
+Write-Output "Запускается: $target $arguments"

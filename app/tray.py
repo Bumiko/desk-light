@@ -23,8 +23,18 @@ from PIL import Image, ImageDraw
 
 from link import find
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(HERE, os.pardir, "state.json")
+def state_file():
+    """Запомненная яркость. Рядом с exe класть нельзя — папка может быть только для чтения."""
+    folder = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+                          "desk-light")
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception:
+        pass
+    return os.path.join(folder, "state.json")
+
+
+STATE_FILE = state_file()
 
 PRESETS = [50, 100, 200, 350, 500, 700, 1000]  # быстрые уровни в меню, шкала 0..1000
 MIN_LEVEL, MAX_LEVEL, STEP = 25, 1000, 25      # горячими клавишами — мелким шагом
@@ -164,7 +174,22 @@ def hotkey_loop(handlers):
                 handlers[HOTKEYS[index][3]]()
 
 
+_mutex = None
+
+
+def already_running():
+    """Вторая копия боролась бы за порт платы и висела бы с ошибкой."""
+    global _mutex
+    kernel32 = ctypes.windll.kernel32
+    _mutex = kernel32.CreateMutexW(None, False, "Global\\desk-light-tray")
+    return kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
+
+
 def main():
+    if already_running():
+        print("Подсветка уже запущена — значок ищи в скрытых значках трея.", flush=True)
+        return
+
     lights = Lights()
     icon = pystray.Icon("desk-light", make_icon(False, False), "Подсветка клавиатуры")
 
