@@ -234,9 +234,14 @@ def main():
     threading.Thread(target=lights.heartbeat_loop, daemon=True).start()
     threading.Thread(target=lights.applier_loop, daemon=True).start()
 
+    def setup(tray):
+        # со своей setup-функцией pystray не показывает значок сам: надо явно
+        tray.visible = True
+        refresh()
+
     print("Подсветка запущена. Ctrl+Alt+L — вкл/выкл, Ctrl+Alt+PgUp/PgDn — яркость.",
           flush=True)
-    icon.run(setup=lambda i: refresh())
+    icon.run(setup=setup)
 
 
 if __name__ == "__main__":
