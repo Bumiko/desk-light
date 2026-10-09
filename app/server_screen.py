@@ -26,6 +26,7 @@ STALE_S = 15.0   # сводка старше — на экране «нет св
 TIMEOUT_S = 2.5
 
 state = {"screen": False, "server": False, "note": "не запущено"}
+_written = 0.0
 
 
 def folder():
@@ -110,12 +111,16 @@ def to_view(status):
 
 
 def note(screen_ok, server_ok, text):
-    """Состояние для значка в трее и файл рядом с настройками: видно, жив ли экран."""
+    """Состояние в файл рядом с настройками: видно, жив ли экран. Пишется при каждой
+    перемене и не реже раза в минуту — по времени записи понятно, что программа жива."""
+    global _written
     changed = (state["screen"], state["server"], state["note"]) != (screen_ok, server_ok, text)
     state.update(screen=screen_ok, server=server_ok, note=text)
-    if not changed:
+    if changed:
+        print("экран: %s" % text, flush=True)
+    elif time.time() - _written < 60:
         return
-    print("экран: %s" % text, flush=True)
+    _written = time.time()
     try:
         with open(os.path.join(folder(), "screen-status.json"), "w", encoding="utf-8") as f:
             json.dump(dict(state, at=time.strftime("%Y-%m-%d %H:%M:%S")), f, ensure_ascii=False)
