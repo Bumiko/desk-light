@@ -6,3 +6,4 @@ build/
 dist/
 state.json
 config.local.json
+preview*.png

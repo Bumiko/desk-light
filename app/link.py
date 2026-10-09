@@ -5,8 +5,9 @@ import time
 import serial
 from serial.tools import list_ports
 
-VID_PID = (0x2E8A, 0x0005)  # RP2040 с MicroPython
-GREETING = "desk-light"
+# RP2040 с MicroPython: общий PID и свой у сборки под Waveshare RP2040-Zero
+VID_PIDS = {(0x2E8A, 0x0005), (0x2E8A, 0x101F)}
+GREETING = "desk-light"  # плата подсветки; плата экрана отвечает "desk-display"
 
 
 class Board:
@@ -31,12 +32,15 @@ class Board:
 def candidates():
     """Порты по убыванию вероятности: сначала совпавшие по VID:PID."""
     ports = [p for p in list_ports.comports() if p.device != "COM1"]
-    ports.sort(key=lambda p: (p.vid, p.pid) != VID_PID)
+    ports.sort(key=lambda p: (p.vid, p.pid) not in VID_PIDS)
     return [p.device for p in ports]
 
 
-def find(timeout=3.0):
-    """Найти плату по ответу на PING. Бросает RuntimeError, если не нашлась."""
+def find(timeout=3.0, greeting=GREETING):
+    """Найти плату по ответу на PING. Бросает RuntimeError, если не нашлась.
+
+    Плат может быть несколько: нужную выбирает слово в ответе.
+    """
     deadline = time.time() + timeout
     seen = []
     while time.time() < deadline:
@@ -47,7 +51,7 @@ def find(timeout=3.0):
             except Exception:
                 continue
             try:
-                if GREETING in board.send("PING"):
+                if greeting in board.send("PING"):
                     return board
             except Exception:
                 pass
