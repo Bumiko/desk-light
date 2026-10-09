@@ -33,17 +33,6 @@ def shade(percent, warn=70, bad=90):
     return RED if percent >= bad else AMBER if percent >= warn else GREEN
 
 
-def plural(n, one, few, many):
-    """1 задача, 2 задачи, 5 задач."""
-    if not isinstance(n, int):
-        return many
-    if n % 10 == 1 and n % 100 != 11:
-        return one
-    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
-        return few
-    return many
-
-
 def show(value, suffix=""):
     return "—" if value is None else "%s%s" % (value, suffix)
 
@@ -80,7 +69,7 @@ def render(data, demo=False):
     draw = ImageDraw.Draw(image)
 
     # шапка: имя, сколько работает, время сводки
-    draw.ellipse((6, 9, 16, 19), fill=GREEN)
+    draw.ellipse((6, 9, 16, 19), fill=GREEN if get("ok", True) else RED)
     draw.text((22, 14), get("host", "сервер"), font=font(17, True), fill=TEXT, anchor="lm")
     right = get("clock", "")
     if get("uptime"):
@@ -106,10 +95,7 @@ def render(data, demo=False):
     count_tile(draw, (215, 120, 316, 192), "встречи", meetings, GREEN if agents else TEXT)
 
     # подвал: итог дня и лампочки служб
-    jobs = get("jobs_today")
-    today = "сегодня %s ч · %s %s" % (show(get("audio_hours_today")), show(jobs),
-                                     plural(jobs, "задача", "задачи", "задач"))
-    draw.text((6, 208), today, font=font(15), fill=TEXT, anchor="lm")
+    draw.text((6, 208), get("today", ""), font=font(15), fill=TEXT, anchor="lm")
     x = 6
     for name, state in get("lamps", []):
         ink = GREY if state is None else GREEN if state else RED
@@ -134,8 +120,9 @@ DEMO = {
     "gpu_load": 34, "gpu_temp": 52, "gpu_mem_used": "5,1", "gpu_mem_total": 12,
     "gpu_watts": 140, "cpu_load": 12, "cpu_temp": 34,
     "queued": 2, "running": 1, "agents": 1, "agents_max": 3,
-    "audio_hours_today": "3,4", "jobs_today": 41,
-    "lamps": [("туннель", True), ("бэкап", True), ("API", True)],
+    "today": "сегодня 3,4 ч аудио · 4 клиента",
+    "lamps": [("API", True), ("туннель", True), ("встречи", True), ("бэкап", False),
+              ("вент.", True)],
 }
 
 if __name__ == "__main__":

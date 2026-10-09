@@ -9,6 +9,9 @@
 Связь с платой держится сама: раз в несколько секунд состояние подтверждается заново,
 так что после перетыкания кабеля или перезагрузки платы свет возвращается без участия
 человека. Если приложение закрыть, плата через 15 секунд погасит ленту сама.
+
+Если подключена вторая плата, с экраном, приложение заодно выводит на неё сводку
+сервера: app/server_screen.py.
 """
 
 import ctypes
@@ -21,6 +24,7 @@ from ctypes import wintypes
 import pystray
 from PIL import Image, ImageDraw
 
+import server_screen
 from link import find
 
 def state_file():
@@ -233,6 +237,8 @@ def main():
     threading.Thread(target=hotkey_loop, args=(handlers,), daemon=True).start()
     threading.Thread(target=lights.heartbeat_loop, daemon=True).start()
     threading.Thread(target=lights.applier_loop, daemon=True).start()
+    # вторая плата, с экраном: сводка сервера. Нет адреса в config.json — не запускается
+    server_screen.start()
 
     def setup(tray):
         # со своей setup-функцией pystray не показывает значок сам: надо явно
